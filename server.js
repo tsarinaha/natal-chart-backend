@@ -12,44 +12,57 @@ const AUTH_HEADER = 'Basic NjM1ODk1OmRjZjM4MjkwYWY2OWQwNjMwMDAxODRiNWI2NTlmY2RiM
 
 // Natal Chart Endpoint
 app.post('/natal_chart', async (req, res) => {
-  const { birthdate, birthtime, birthplace } = req.body;
+    try {
+        const { birthdate, birthtime, birthplace } = req.body;
 
-  try {
-    // Step 1: Geocode the birthplace to get latitude and longitude
-    const geoResponse = await axios.get(`https://geocode.xyz/${birthplace}?json=1`);
-    const { latt: lat, longt: lon } = geoResponse.data;
+        // Validate inputs
+        if (!birthdate || !birthtime || !birthplace) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
 
-    if (!lat || !lon) {
-      return res.status(400).json({ error: 'Invalid birthplace. Unable to retrieve coordinates.' });
+        console.log('Input received:', { birthdate, birthtime, birthplace });
+
+        // Geocoding request
+        const geoResponse = await axios.get(`https://geocode.xyz/${birthplace}?json=1`);
+        console.log('Geocoding response:', geoResponse.data);
+
+        const { latt: lat, longt: lon } = geoResponse.data;
+
+        if (!lat || !lon) {
+            console.error('Geocoding failed:', geoResponse.data);
+            return res.status(400).json({ error: 'Invalid birthplace. Unable to retrieve coordinates.' });
+        }
+
+        // Parse date and time
+        const [year, month, day] = birthdate.split('-').map(Number);
+        const [hour, minute] = birthtime.split(':').map(Number);
+
+        // Prepare AstrologyAPI payload
+        const data = {
+            day,
+            month,
+            year,
+            hour,
+            min: minute,
+            lat: parseFloat(lat),
+            lon: parseFloat(lon),
+            tzone: 0, // Adjust timezone if necessary
+        };
+
+        console.log('AstrologyAPI payload:', data);
+
+        // AstrologyAPI request
+        const astroResponse = await axios.post('https://json.astrologyapi.com/v1/natal_chart', data, {
+            headers: { Authorization: 'Basic NjM1ODk1OmRjZjM4MjkwYWY2OWQwNjMwMDAxODRiNWI2NTlmY2RiMjBiMTBmNTg=' },
+        });
+
+        console.log('AstrologyAPI response:', astroResponse.data);
+
+        res.json(astroResponse.data);
+    } catch (error) {
+        console.error('Error generating natal chart:', error.message || error);
+        res.status(500).json({ error: 'Error generating natal chart. Please try again.' });
     }
-
-    // Step 2: Parse the birthdate and time
-    const [year, month, day] = birthdate.split('-').map(Number);
-    const [hour, minute] = birthtime.split(':').map(Number);
-
-    // Step 3: Prepare request payload for AstrologyAPI
-    const data = {
-      day,
-      month,
-      year,
-      hour,
-      min: minute,
-      lat: parseFloat(lat),
-      lon: parseFloat(lon),
-      tzone: 0, // Adjust timezone dynamically if needed
-    };
-
-    // Step 4: Call the AstrologyAPI to generate natal chart
-    const response = await axios.post(`${ASTROLOGY_API_BASE}/natal_chart`, data, {
-      headers: { Authorization: AUTH_HEADER },
-    });
-
-    // Step 5: Send back the response
-    res.json(response.data);
-  } catch (error) {
-    console.error('Error:', error.message);
-    res.status(500).json({ error: 'Error generating natal chart. Please try again.' });
-  }
 });
 
 const PORT = process.env.PORT || 5000;
